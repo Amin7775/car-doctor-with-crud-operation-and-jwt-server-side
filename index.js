@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken')
+const cookieParser = require('cookie-parser')
 require('dotenv').config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express()
@@ -12,7 +13,30 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json())
+app.use(cookieParser())
 
+//custom middleware
+const logger = (req,res,next)=>{
+  console.log(req.method, req.url);
+  next()
+}
+
+const verifyToken = (req,res,next)=>{
+  const token = req?.cookies?.token;
+  console.log("from verify", token)
+  if(!token){
+    return res.status(401).send({Message: "Unauthorized Access"})
+  }
+  jwt.verify(token,process.env.SECRET_ACCESS_TOKEN, (err,decoded)=>{
+    if(err){
+      return res.status(401).send({Message : 'Unauthorized Access'})
+    }
+
+    req.user = decoded;
+
+    next()
+  })
+}
 
 app.get('/', (req,res)=>{
     res.send('Car Doctor Is Running')
@@ -93,7 +117,13 @@ async function run() {
       res.send(result)
     })
 
-    app.get('/bookings', async(req,res)=>{
+    app.get('/bookings',logger,verifyToken, async(req,res)=>{
+      console.log(req.cookies)
+      console.log("query email", req.query.email)
+      console.log("token owner info", req.user)
+      if(req.user.email !== req.query.email){
+        return res.status(403).send({Message: 'Forbidden Access'})
+      }
       let query={}
       if(req.query?.email){
         query = {email: req.query.email}
